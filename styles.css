@@ -6,3 +6,310 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+.codex-history-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.codex-history-toolbar {
+	display: flex;
+	gap: var(--size-4-2);
+	align-items: end;
+	padding: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.codex-history-working-directory {
+	flex: 1;
+	min-width: 0;
+}
+
+.codex-history-working-directory label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+.codex-history-working-directory input {
+	width: 100%;
+}
+
+.codex-history-directory-actions {
+	display: flex;
+	gap: var(--size-4-1);
+}
+
+.codex-history-inline-status {
+	min-height: 1.2em;
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-reload {
+	display: flex;
+	gap: var(--size-4-1);
+	align-items: center;
+}
+
+.codex-history-split {
+	position: relative;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.codex-history-list-pane,
+.codex-history-detail-pane {
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+}
+
+.codex-history-content {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+}
+
+button.codex-history-session-toggle {
+	position: absolute;
+	top: var(--size-4-2);
+	left: var(--size-4-3);
+	z-index: 12;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--size-4-8);
+	height: var(--size-4-8);
+	min-width: var(--size-4-8);
+	min-height: var(--size-4-8);
+	padding: 0 !important;
+	line-height: 1;
+	box-sizing: border-box;
+}
+
+.codex-history-list-pane {
+	position: absolute;
+	top: calc(var(--size-4-3) + 2.5rem);
+	bottom: 0;
+	left: 0;
+	z-index: 11;
+	width: min(23rem, 88%);
+	border-right: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-l);
+	transform: translateX(-105%);
+	transition: transform 160ms ease;
+}
+
+.codex-history-list-pane.is-open {
+	transform: translateX(0);
+}
+
+.codex-history-list-backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	border: 0;
+	border-radius: 0;
+	background: color-mix(in srgb, var(--background-primary) 45%, transparent);
+	cursor: default;
+}
+
+.codex-history-list-header {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	background: var(--background-primary);
+}
+
+.codex-history-list-title-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+}
+
+.codex-history-list-header h3,
+.codex-history-detail-header h2 {
+	margin: 0;
+}
+
+.codex-history-detail-header h2 {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.codex-history-session-count {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-list-header input {
+	width: 100%;
+}
+
+.codex-history-session-list {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+}
+
+.codex-history-session-item {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: flex-start;
+	width: 100%;
+	height: auto !important;
+	min-height: 0;
+	padding: var(--size-4-2) var(--size-4-3);
+	border: 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-radius: 0;
+	background: transparent;
+	text-align: left;
+	white-space: normal;
+	cursor: pointer;
+}
+
+.codex-history-session-item:hover,
+.codex-history-session-item.is-selected {
+	background: var(--background-modifier-hover);
+}
+
+.codex-history-session-item.is-selected {
+	box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.codex-history-session-title {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	overflow: hidden;
+	font-weight: var(--font-semibold);
+	line-height: 1.35;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.codex-history-session-meta {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-detail-header > .codex-history-session-meta {
+	justify-content: flex-start;
+	margin-top: var(--size-4-1);
+}
+
+.codex-history-detail-pane {
+	height: 100%;
+	padding: var(--size-4-3);
+	padding-top: calc(var(--size-4-3) + 2.5rem);
+}
+
+.codex-history-detail-header {
+	margin-bottom: var(--size-4-4);
+}
+
+.codex-history-message {
+	margin: 0 0 var(--size-4-4);
+	padding: var(--size-4-3);
+	border-left: 3px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.codex-history-role-user {
+	border-left-color: transparent;
+	background: var(--background-secondary-alt, var(--background-modifier-hover));
+}
+.codex-history-role-assistant { border-left-color: var(--color-green); }
+.codex-history-role-system { border-left-color: var(--color-orange); }
+.codex-history-role-tool { border-left-color: var(--color-purple); }
+.codex-history-role-unknown { border-left-color: var(--text-muted); }
+
+.codex-history-command {
+	margin: 0 0 var(--size-4-4);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+}
+
+.codex-history-command summary {
+	padding: var(--size-4-2) var(--size-4-3);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+}
+
+.codex-history-command[open] summary {
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.codex-history-command > .codex-history-message {
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+}
+
+.codex-history-message-header {
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-transform: capitalize;
+}
+
+.codex-history-message-body {
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.codex-history-message-body pre {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.codex-history-message-body mjx-container {
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+
+.codex-history-error,
+.codex-history-state,
+.codex-history-empty {
+	padding: var(--size-4-3);
+	color: var(--text-muted);
+}
+
+.codex-history-status {
+	padding: var(--size-4-2) var(--size-4-3);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-error,
+.mod-warning {
+	color: var(--text-error);
+}
+
+@media (max-width: 520px) {
+	.codex-history-toolbar { flex-wrap: wrap; }
+	.codex-history-list-pane { width: 100%; border-right: 0; }
+	.codex-history-detail-pane { flex: 1; }
+}

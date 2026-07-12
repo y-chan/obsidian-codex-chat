@@ -1,0 +1,5 @@
+{"timestamp":"2026-01-02T03:04:05.000Z","type":"session_meta","payload":{"id":"fixture-session-001","cwd":"C:\\work\\demo","thread_name":"Fixture session","thread_source":"user"}}
+{"timestamp":"2026-01-02T03:04:06.000Z","type":"event_msg","payload":{"type":"user_message","message":"Explain $$x^2 + y^2 = z^2$$"}}
+this is a deliberately broken JSONL line
+{"timestamp":"2026-01-02T03:04:07.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"# Result\\n\\n$$x^2 + y^2 = z^2$$"}]}}
+{"timestamp":"2026-01-02T03:04:08.000Z","type":"future_event","payload":{"value":"kept as unknown"}}
