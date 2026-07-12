@@ -5,7 +5,7 @@ Codex History is a desktop-only Obsidian community plugin for browsing local Cod
 ## Scope and security
 
 - Windows and macOS desktop are the primary targets. Mobile is not supported.
-- The initial version is read-only. It does not start Codex, send prompts, read API keys, or handle ChatGPT cookies/tokens.
+- The plugin can start Codex CLI through `@openai/codex-sdk` and send prompts from the chat composer. It does not read or store API keys itself; authentication and model/provider configuration remain managed by Codex CLI.
 - History remains local. The plugin adds no telemetry and does not upload vault contents or history.
 - History text is passed to `MarkdownRenderer`; it is not inserted as raw HTML and does not execute JavaScript from a history file.
 - The plugin validates the selected working directory before reading history and does not write outside Obsidian's settings storage.
@@ -41,7 +41,7 @@ The Codex rollout format and paths may change between Codex releases. If a sessi
 - Sessions are associated with a working directory only when the rollout contains cwd metadata. An explicitly selected file can still be inspected without cwd metadata.
 - SQLite state databases and Codex's session index are not used as authoritative transcript sources in this version. Rollout JSONL is preferred because it contains the conversation body and avoids an SQLite native dependency.
 - Very large rollouts are capped by the configurable maximum message count. Individual unreadable files are reported without stopping the rest of the scan.
-- The current provider is read-only. Chat sending, thread creation/resume, streaming, approvals, command output, diffs, note context, and Markdown export are planned behind future provider/service interfaces.
+- Chat sending uses the Codex SDK's local CLI process. A thread can be continued while the view is open, and the existing rollout provider remains responsible for history browsing. Streaming events, approvals, richer command output, note context, and Markdown export remain future extensions.
 
 ## Architecture
 

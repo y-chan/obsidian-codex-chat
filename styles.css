@@ -17,12 +17,20 @@ If your plugin does not need CSS, delete this file.
 .codex-history-toolbar {
 	display: flex;
 	gap: var(--size-4-2);
-	align-items: end;
+	align-items: flex-end;
 	padding: var(--size-4-2);
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .codex-history-working-directory {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--size-4-2);
+	flex: 1;
+	min-width: 0;
+}
+
+.codex-history-working-directory form {
 	flex: 1;
 	min-width: 0;
 }
@@ -42,6 +50,7 @@ If your plugin does not need CSS, delete this file.
 .codex-history-directory-actions {
 	display: flex;
 	gap: var(--size-4-1);
+	padding-bottom: 1px;
 }
 
 .codex-history-inline-status {
@@ -217,13 +226,94 @@ button.codex-history-session-toggle {
 }
 
 .codex-history-detail-pane {
+	display: flex;
+	flex-direction: column;
 	height: 100%;
+	min-height: 0;
+	overflow: hidden;
 	padding: var(--size-4-3);
 	padding-top: calc(var(--size-4-3) + 2.5rem);
 }
 
 .codex-history-detail-header {
+	flex: 0 0 auto;
 	margin-bottom: var(--size-4-4);
+}
+
+.codex-history-messages {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding-right: var(--size-4-2);
+}
+
+.codex-history-composer {
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	gap: var(--size-4-1);
+	align-items: flex-end;
+	padding: var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+}
+
+.codex-history-composer textarea {
+	flex: 1;
+	min-width: 0;
+	min-height: 2.6rem;
+	resize: vertical;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	user-select: text;
+}
+
+.codex-history-composer button {
+	flex: 0 0 auto;
+	width: 2.2rem;
+	height: 2.2rem;
+	padding: 0;
+	border-radius: 50%;
+}
+
+.codex-history-file-input {
+	display: none;
+}
+
+.codex-history-upload,
+.codex-history-send,
+.codex-history-stop {
+	color: var(--text-muted);
+}
+
+.codex-history-send {
+	color: var(--text-on-accent);
+	background: var(--interactive-accent);
+}
+
+.codex-history-stop {
+	color: var(--text-error);
+}
+
+.codex-history-attachment-count {
+	position: absolute;
+	bottom: calc(100% + var(--size-4-1));
+	left: var(--size-4-2);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-composer-status {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2) 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 .codex-history-message {
@@ -231,13 +321,17 @@ button.codex-history-session-toggle {
 	padding: var(--size-4-3);
 	border-left: 3px solid var(--background-modifier-border);
 	background: var(--background-secondary);
+	user-select: text;
 }
 
 .codex-history-role-user {
 	border-left-color: transparent;
 	background: var(--background-secondary-alt, var(--background-modifier-hover));
 }
-.codex-history-role-assistant { border-left-color: var(--color-green); }
+.codex-history-role-assistant {
+	border-left-color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 7%, var(--background-primary));
+}
 .codex-history-role-system { border-left-color: var(--color-orange); }
 .codex-history-role-tool { border-left-color: var(--color-purple); }
 .codex-history-role-unknown { border-left-color: var(--text-muted); }
@@ -277,6 +371,13 @@ button.codex-history-session-toggle {
 .codex-history-message-body {
 	min-width: 0;
 	overflow-x: auto;
+	user-select: text;
+}
+
+.codex-history-message-body a {
+	color: var(--link-color);
+	cursor: pointer;
+	user-select: text;
 }
 
 .codex-history-message-body pre {
@@ -298,9 +399,37 @@ button.codex-history-session-toggle {
 }
 
 .codex-history-status {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
 	padding: var(--size-4-2) var(--size-4-3);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-status.is-working {
+	color: var(--text-normal);
+}
+
+.codex-history-status-indicator,
+.codex-history-working-indicator {
+	display: inline-block;
+	flex: 0 0 auto;
+	width: 0.8em;
+	height: 0.8em;
+	border: 2px solid color-mix(in srgb, var(--interactive-accent) 35%, transparent);
+	border-top-color: var(--interactive-accent);
+	border-radius: 50%;
+	animation: codex-history-spin 800ms linear infinite;
+}
+
+.codex-history-working-indicator {
+	margin-right: var(--size-4-1);
+	vertical-align: -0.1em;
+}
+
+@keyframes codex-history-spin {
+	to { transform: rotate(360deg); }
 }
 
 .codex-history-error,

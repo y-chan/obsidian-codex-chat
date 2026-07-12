@@ -3,6 +3,7 @@ import { normalizeSettings, CodexHistorySettingTab, CodexHistorySettings } from 
 import { Logger } from './utils/logger';
 import { WorkingDirectoryService } from './services/WorkingDirectoryService';
 import { CodexHistoryService } from './services/CodexHistoryService';
+import { CodexChatService } from './services/CodexChatService';
 import { LocalCodexHistoryProvider } from './providers/LocalCodexHistoryProvider';
 import { CodexHistoryView, CODEX_HISTORY_VIEW_TYPE } from './views/CodexHistoryView';
 import type { HistoryLoadError } from './types/codex';
@@ -12,13 +13,15 @@ export default class CodexHistoryPlugin extends Plugin {
 	private workingDirectoryService!: WorkingDirectoryService;
 	private historyProvider!: LocalCodexHistoryProvider;
 	private historyService!: CodexHistoryService;
+	private chatService!: CodexChatService;
 
 	async onload(): Promise<void> {
 		this.settings = normalizeSettings((await this.loadData()) as Partial<CodexHistorySettings>);
 		this.workingDirectoryService = new WorkingDirectoryService(this.app);
 		this.historyProvider = new LocalCodexHistoryProvider({ historyPath: this.settings.historyPath, autoDiscoverHistory: this.settings.autoDiscoverHistory, maxSessions: this.settings.maxSessions, maxMessagesPerSession: this.settings.maxMessagesPerSession, logger: new Logger(this.settings.debugLogging) });
 		this.historyService = new CodexHistoryService(this.historyProvider);
-		this.registerView(CODEX_HISTORY_VIEW_TYPE, (leaf) => new CodexHistoryView(leaf, this.historyService, this.workingDirectoryService, this));
+		this.chatService = new CodexChatService(this.settings.model);
+		this.registerView(CODEX_HISTORY_VIEW_TYPE, (leaf) => new CodexHistoryView(leaf, this.historyService, this.workingDirectoryService, this.chatService, this));
 		this.addSettingTab(new CodexHistorySettingTab(this.app, this));
 		this.addRibbonIcon('history', 'Open Codex History', () => void this.openHistoryView());
 		this.addCommand({ id: 'open-codex-history', name: 'Open Codex History', callback: () => void this.openHistoryView() });
@@ -60,6 +63,7 @@ export default class CodexHistoryPlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		this.settings = normalizeSettings(this.settings);
+		this.chatService?.setModel(this.settings.model);
 		this.historyProvider?.updateOptions({ historyPath: this.settings.historyPath, autoDiscoverHistory: this.settings.autoDiscoverHistory, maxSessions: this.settings.maxSessions, maxMessagesPerSession: this.settings.maxMessagesPerSession, logger: new Logger(this.settings.debugLogging) });
 		await this.saveData(this.settings);
 	}

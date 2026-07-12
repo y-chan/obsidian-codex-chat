@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CodexHistoryService } from '../services/CodexHistoryService';
 import { WorkingDirectoryService } from '../services/WorkingDirectoryService';
+import { CodexChatService } from '../services/CodexChatService';
 import { CodexHistoryApp, type CodexHistoryAppHandle } from '../ui/CodexHistoryApp';
 
 export const CODEX_HISTORY_VIEW_TYPE = 'codex-history-view';
@@ -19,6 +20,7 @@ export class CodexHistoryView extends ItemView {
 		leaf: WorkspaceLeaf,
 		private readonly historyService: CodexHistoryService,
 		private readonly workingDirectoryService: WorkingDirectoryService,
+		private readonly chatService: CodexChatService,
 		private readonly host: CodexHistoryViewHost,
 	) {
 		super(leaf);
@@ -33,7 +35,8 @@ export class CodexHistoryView extends ItemView {
 			ref: (handle: CodexHistoryAppHandle | null) => { this.appRef.current = handle; },
 			app: this.app,
 			historyService: this.historyService,
-			workingDirectoryService: this.workingDirectoryService,
+				workingDirectoryService: this.workingDirectoryService,
+				chatService: this.chatService,
 			initialWorkingDirectory: this.host.getInitialWorkingDirectory(),
 		}));
 	}

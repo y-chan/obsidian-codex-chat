@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting } from 'obsidian';
 import type CodexHistoryPlugin from './plugin';
 
 export interface CodexHistorySettings {
+	model: string;
 	defaultWorkingDirectory: string;
 	useVaultRootAsDefault: boolean;
 	historyPath: string;
@@ -12,6 +13,7 @@ export interface CodexHistorySettings {
 }
 
 export const DEFAULT_SETTINGS: CodexHistorySettings = {
+	model: '',
 	defaultWorkingDirectory: '',
 	useVaultRootAsDefault: true,
 	historyPath: '',
@@ -44,6 +46,9 @@ export class CodexHistorySettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		new Setting(containerEl).setName('History').setHeading();
+		new Setting(containerEl).setName('Model').setDesc('Optional Codex model ID. Leave empty to use the CLI default.').addText((text) => text.setPlaceholder('Use CLI default').setValue(this.plugin.settings.model).onChange(async (value) => {
+			this.plugin.settings.model = value.trim(); await this.plugin.saveSettings();
+		}));
 
 		new Setting(containerEl).setName('Default working directory').setDesc('Used when a history view is opened.').addText((text) => text.setPlaceholder('C:\\Users\\name\\project').setValue(this.plugin.settings.defaultWorkingDirectory).onChange(async (value) => {
 			this.plugin.settings.defaultWorkingDirectory = value.trim(); await this.plugin.saveSettings();

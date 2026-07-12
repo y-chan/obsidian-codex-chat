@@ -1,5 +1,6 @@
 import esbuild from 'esbuild';
 import process from 'process';
+import fs from 'node:fs/promises';
 import { builtinModules } from 'node:module';
 
 const banner = `/*
@@ -10,12 +11,26 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === 'production';
 
+const codexSdkCjsCompatibility = {
+	name: 'codex-sdk-cjs-compatibility',
+	setup(build) {
+		build.onLoad({ filter: /codex-sdk/ }, async (args) => {
+			const source = await fs.readFile(args.path, 'utf8');
+			return {
+				contents: source.replaceAll('import.meta.url', 'require("url").pathToFileURL(__filename).href'),
+				loader: 'js',
+			};
+		});
+	},
+};
+
 const context = await esbuild.context({
 	banner: {
 		js: banner,
 	},
 	entryPoints: ['src/main.ts'],
 	bundle: true,
+	plugins: [codexSdkCjsCompatibility],
 	external: [
 		'obsidian',
 		'electron',
