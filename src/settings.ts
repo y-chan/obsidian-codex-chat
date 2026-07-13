@@ -49,8 +49,8 @@ export class CodexHistorySettingTab extends PluginSettingTab {
 			this.plugin.settings.model = value.trim(); await this.plugin.saveSettings();
 		}));
 
-		new Setting(containerEl).setName('Default working directory').setDesc('Used when Codex Chat is opened.').addText((text) => text.setPlaceholder('C:\\Users\\name\\project').setValue(this.plugin.settings.defaultWorkingDirectory).onChange(async (value) => {
-			this.plugin.settings.defaultWorkingDirectory = value.trim(); await this.plugin.saveSettings();
+		new Setting(containerEl).setName('Default working directory').setDesc('Vault-relative paths are portable across Mac and Windows.').addText((text) => text.setPlaceholder('projects/my-app or an external absolute path').setValue(this.plugin.settings.defaultWorkingDirectory).onChange(async (value) => {
+			this.plugin.settings.defaultWorkingDirectory = this.plugin.toStoredWorkingDirectory(value); await this.plugin.saveSettings();
 		}));
 		new Setting(containerEl).setName('Use vault root by default').setDesc('Use the local vault root when no explicit directory is set.').addToggle((toggle) => toggle.setValue(this.plugin.settings.useVaultRootAsDefault).onChange(async (value) => {
 			this.plugin.settings.useVaultRootAsDefault = value; await this.plugin.saveSettings();

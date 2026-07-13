@@ -17,16 +17,24 @@ If your plugin does not need CSS, delete this file.
 .codex-history-toolbar {
 	display: flex;
 	gap: var(--size-4-2);
-	align-items: flex-end;
+	align-items: flex-start;
 	padding: var(--size-4-2);
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
 .codex-history-working-directory {
 	display: flex;
-	align-items: flex-end;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--size-4-2);
 	flex: 1;
+	min-width: 0;
+}
+
+.codex-history-working-directory-controls {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--size-4-2);
 	min-width: 0;
 }
 
@@ -50,11 +58,15 @@ If your plugin does not need CSS, delete this file.
 .codex-history-directory-actions {
 	display: flex;
 	gap: var(--size-4-1);
-	padding-bottom: 1px;
+	align-self: flex-end;
 }
 
 .codex-history-inline-status {
 	min-height: 1.2em;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: var(--font-ui-smaller);
 }
 
@@ -62,6 +74,7 @@ If your plugin does not need CSS, delete this file.
 	display: flex;
 	gap: var(--size-4-1);
 	align-items: center;
+	align-self: flex-end;
 }
 
 .codex-history-split {

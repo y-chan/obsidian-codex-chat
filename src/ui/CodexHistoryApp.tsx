@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
-import { App, Component, MarkdownRenderer, setIcon } from 'obsidian';
+import { App, Component, FileSystemAdapter, MarkdownRenderer, setIcon } from 'obsidian';
+import path from 'node:path';
 import type { CodexMessage, CodexSession, CodexSessionSummary } from '../types/codex';
 import { filterSessionSummaries } from '../parsers/CodexHistoryParser';
 import { CodexHistoryService } from '../services/CodexHistoryService';
 import { WorkingDirectoryService } from '../services/WorkingDirectoryService';
 import { CodexAppServerService, type AppServerModel, type AppServerUpdate, type ApprovalDecision, type ThinkingEffort, type UsageStatus } from '../services/CodexAppServerService';
 import { decorateDiffBlocks, normalizeToolMarkdown } from './diff';
+import { normalizeFilesystemPath } from '../utils/paths';
 
 export interface CodexHistoryAppHandle {
 	reload: () => Promise<void>;
@@ -42,10 +44,13 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 	const abortControllerRef = useRef<AbortController>();
 	const sendingRef = useRef(false);
 	const [error, setError] = useState<string>();
+	const [workingDirectoryError, setWorkingDirectoryError] = useState<string>();
 	const [status, setStatus] = useState('');
 	const [usageStatus, setUsageStatus] = useState<UsageStatus>();
 	const loadGeneration = useRef(0);
 	const sessionGeneration = useRef(0);
+	const workingDirectoryGeneration = useRef(0);
+	const workingDirectoryValue = useRef(initialWorkingDirectory ?? '');
 
 	useEffect(() => {
 		setSelectedModel(chatService.getModel());
@@ -82,16 +87,24 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 			setSessions(snapshot.sessions);
 			setSelectedSessionId((current) => current && snapshot.sessions.some((session) => session.id === current) ? current : undefined);
 			setSelectedSession((current) => current && snapshot.sessions.some((session) => session.id === current.id) ? current : undefined);
+			setWorkingDirectoryError(undefined);
 			setStatus(`Loaded ${snapshot.sessions.length} session(s).`);
 			if (snapshot.errors.length > 0) setError(`${snapshot.errors.length} history file(s) could not be read. Check debug logging for details.`);
 		} catch (loadError) {
-			if (generation === loadGeneration.current) setError(toErrorMessage(loadError));
+			if (generation === loadGeneration.current) {
+				const message = toErrorMessage(loadError);
+				if (isWorkingDirectoryError(message)) setWorkingDirectoryError(message);
+				else setError(message);
+			}
 		} finally {
 			if (generation === loadGeneration.current) setIsLoading(false);
 		}
 	}, [historyService]);
 
 	const setWorkingDirectory = useCallback(async (value: string): Promise<void> => {
+		workingDirectoryGeneration.current += 1;
+		workingDirectoryValue.current = value;
+		setWorkingDirectoryError(undefined);
 		setWorkingDirectoryState(value);
 		setSelectedSessionId(undefined);
 		setSelectedSession(undefined);
@@ -107,16 +120,17 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 
 	useEffect(() => {
 		let active = true;
+		const generation = workingDirectoryGeneration.current;
 		if (!initialWorkingDirectory) {
 			setError('Set a working directory to load Codex sessions.');
 			return () => { active = false; };
 		}
 		void workingDirectoryService.validate(initialWorkingDirectory).then((validated) => {
-			if (!active) return;
+			if (!active || generation !== workingDirectoryGeneration.current) return;
 			setWorkingDirectoryState(validated);
 			void load(validated);
 		}).catch((validationError: unknown) => {
-			if (active) setError(toErrorMessage(validationError));
+			if (active && generation === workingDirectoryGeneration.current && workingDirectoryValue.current === initialWorkingDirectory) setWorkingDirectoryError(toErrorMessage(validationError));
 		});
 		return () => { active = false; };
 	}, [initialWorkingDirectory, load, workingDirectoryService]);
@@ -267,11 +281,10 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 					service={workingDirectoryService}
 					initialValue={workingDirectory}
 					onChange={setWorkingDirectory}
-					onError={setError}
+					onError={setWorkingDirectoryError}
+					error={workingDirectoryError}
+				reloadButton={<IconButton icon="refresh-cw" label="Reload Codex sessions" className="codex-history-reload" onClick={() => void reload()} disabled={isLoading}>Reload</IconButton>}
 				/>
-				<IconButton icon="refresh-cw" label="Reload Codex sessions" className="codex-history-reload" onClick={() => void reload()} disabled={isLoading}>
-					Reload
-				</IconButton>
 			</div>
 			{error && <div className="codex-history-error">{error}</div>}
 			{status && !error && !isSending && <div className="codex-history-status">{isLoading && <span className="codex-history-status-indicator" aria-hidden="true" />}{status}</div>}
@@ -296,15 +309,18 @@ interface WorkingDirectorySelectorProps {
 	service: WorkingDirectoryService;
 	initialValue: string;
 	onChange: (value: string) => Promise<void>;
-	onError: (message: string) => void;
+	onError: (message?: string) => void;
+	error?: string;
+	reloadButton: ReactNode;
 }
 
-function WorkingDirectorySelector({ service, initialValue, onChange, onError }: WorkingDirectorySelectorProps) {
+function WorkingDirectorySelector({ service, initialValue, onChange, onError, error, reloadButton }: WorkingDirectorySelectorProps) {
 	const [value, setValue] = useState(initialValue);
 	const [status, setStatus] = useState('');
 	const [isError, setIsError] = useState(false);
 	const committedValue = useRef(initialValue);
 	const directoryInputRef = useRef<HTMLInputElement>(null);
+	const validationGeneration = useRef(0);
 
 	useEffect(() => {
 		directoryInputRef.current?.setAttribute('webkitdirectory', '');
@@ -317,14 +333,20 @@ function WorkingDirectorySelector({ service, initialValue, onChange, onError }: 
 
 	const commit = async (nextValue: string): Promise<void> => {
 		if (!nextValue || nextValue === committedValue.current) return;
+		const generation = ++validationGeneration.current;
+		setStatus('');
+		setIsError(false);
+		onError(undefined);
 		try {
 			const validated = await service.validate(nextValue);
+			if (generation !== validationGeneration.current) return;
 			committedValue.current = validated;
 			setValue(validated);
 			setStatus('');
 			setIsError(false);
 			await onChange(validated);
 		} catch (validationError) {
+			if (generation !== validationGeneration.current) return;
 			const message = toErrorMessage(validationError);
 			setStatus(message);
 			setIsError(true);
@@ -386,17 +408,20 @@ function WorkingDirectorySelector({ service, initialValue, onChange, onError }: 
 
 	return (
 		<div className="codex-history-working-directory">
-			<form onSubmit={submit}>
-				<label>
-					Working directory
-					<input type="text" value={value} placeholder="Absolute path" onChange={(event) => setValue(event.target.value)} onBlur={() => void commit(value)} />
-				</label>
-			</form>
-			<div className="codex-history-directory-actions">
-				<input ref={directoryInputRef} className="codex-history-file-input" type="file" onChange={chooseDirectory} />
-				<IconButton icon="folder-open" label="Choose working directory" onClick={() => void openDirectoryPicker()} />
+			<div className="codex-history-working-directory-controls">
+				<form onSubmit={submit}>
+					<label>
+						Working directory
+					<input type="text" value={value} placeholder="Vault-relative path or absolute path" onChange={(event) => { setValue(event.target.value); setStatus(''); setIsError(false); onError(undefined); }} onBlur={(event) => void commit(event.currentTarget.value)} />
+					</label>
+				</form>
+				<div className="codex-history-directory-actions">
+					<input ref={directoryInputRef} className="codex-history-file-input" type="file" onChange={chooseDirectory} />
+					<IconButton icon="folder-open" label="Choose working directory" onClick={() => void openDirectoryPicker()} />
+				</div>
+				{reloadButton}
 			</div>
-			<div className={`codex-history-inline-status${isError ? ' mod-warning' : ''}`}>{status}</div>
+			<div className={`codex-history-inline-status${isError || error ? ' mod-warning' : ''}`}>{status || error}</div>
 		</div>
 	);
 }
@@ -633,7 +658,7 @@ function MarkdownMessage({ app, sessionId, message }: { app: App; sessionId: str
 				return;
 			}
 			const pathPart = linkText.split('#')[0] ?? linkText;
-			void app.workspace.openLinkText(decodeURIComponent(pathPart), '', false);
+			openHistoryFileLink(app, pathPart);
 		};
 		body.addEventListener('click', handleLinkClick);
 		void MarkdownRenderer.render(app, normalizeToolMarkdown(message.markdown, toolName), body, sessionId, component)
@@ -655,6 +680,70 @@ function MarkdownMessage({ app, sessionId, message }: { app: App; sessionId: str
 	);
 }
 
+function openHistoryFileLink(app: App, rawLink: string): void {
+	const decoded = safeDecodeURIComponent(rawLink);
+	const filesystemPath = toFilesystemPath(decoded);
+	const pathApi = process.platform === 'win32' ? path.win32 : path;
+	const root = app.vault.adapter instanceof FileSystemAdapter
+		? normalizeFilesystemPath(app.vault.adapter.getBasePath())
+		: undefined;
+
+	if (filesystemPath && pathApi.isAbsolute(filesystemPath)) {
+		const target = normalizeFilesystemPath(filesystemPath);
+		if (root) {
+			const relative = pathApi.relative(root, target);
+			const outsideVault = relative === '..' || relative.startsWith(`..${pathApi.sep}`) || pathApi.isAbsolute(relative);
+			if (!outsideVault) {
+				void app.workspace.openLinkText((relative || '.').split(pathApi.sep).join('/'), '', false);
+				return;
+			}
+		}
+		// Never pass an external absolute path to openLinkText: Obsidian treats
+		// it as a vault-relative path and may create folders such as "Users".
+		openExternalPath(target);
+		return;
+	}
+
+	void app.workspace.openLinkText(decoded, '', false);
+}
+
+function openExternalPath(target: string): void {
+	try {
+		const windowWithRequire = window as Window & { require?: (moduleName: string) => unknown };
+		const electron = windowWithRequire.require?.('electron') as { shell?: { openPath?: (path: string) => Promise<string> } } | undefined;
+		if (electron?.shell?.openPath) {
+			void electron.shell.openPath(target);
+			return;
+		}
+	} catch {
+		// Fall back to the browser's file handler below.
+	}
+	window.open(pathToFileUrl(target), '_blank', 'noopener,noreferrer');
+}
+
+function pathToFileUrl(target: string): string {
+	const normalized = target.replaceAll('\\', '/');
+	return normalized.startsWith('/') ? `file://${encodeURI(normalized)}` : `file:///${encodeURI(normalized)}`;
+}
+
+function toFilesystemPath(value: string): string | undefined {
+	if (/^file:/i.test(value)) {
+		try {
+			const url = new URL(value);
+			const pathname = decodeURIComponent(url.pathname);
+			if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(pathname)) return pathname.slice(1);
+			return pathname;
+		} catch {
+			return undefined;
+		}
+	}
+	return /^\/(?:Users|Volumes|private|tmp)(?:\/|$)/.test(value) || /^[A-Za-z]:[\\/]/.test(value) || /^\\\\/.test(value) ? value : undefined;
+}
+
+function safeDecodeURIComponent(value: string): string {
+	try { return decodeURIComponent(value); } catch { return value; }
+}
+
 interface IconButtonProps {
 	icon: string;
 	label: string;
@@ -674,4 +763,8 @@ function IconButton({ icon, label, className, disabled, onClick, children }: Ico
 
 function toErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+function isWorkingDirectoryError(message: string): boolean {
+	return message.startsWith('Working directory ');
 }

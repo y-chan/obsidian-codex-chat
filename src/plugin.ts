@@ -18,6 +18,11 @@ export default class CodexHistoryPlugin extends Plugin {
 	async onload(): Promise<void> {
 		this.settings = normalizeSettings((await this.loadData()) as Partial<CodexHistorySettings>);
 		this.workingDirectoryService = new WorkingDirectoryService(this.app);
+		const storedWorkingDirectory = this.workingDirectoryService.toStoredPath(this.settings.defaultWorkingDirectory);
+		if (storedWorkingDirectory !== this.settings.defaultWorkingDirectory) {
+			this.settings.defaultWorkingDirectory = storedWorkingDirectory;
+			await this.saveData(this.settings);
+		}
 		this.historyProvider = new LocalCodexHistoryProvider({ historyPath: this.settings.historyPath, autoDiscoverHistory: this.settings.autoDiscoverHistory, maxSessions: this.settings.maxSessions, maxMessagesPerSession: this.settings.maxMessagesPerSession, logger: new Logger(this.settings.debugLogging) });
 		this.historyService = new CodexHistoryService(this.historyProvider);
 		this.chatService = new CodexAppServerService(this.settings.model, () => this.settings.historyPath);
@@ -52,7 +57,7 @@ export default class CodexHistoryPlugin extends Plugin {
 		if (!value) { new Notice('The requested local directory is unavailable.'); return; }
 		try {
 			const directory = await this.workingDirectoryService.validate(value);
-			this.settings.defaultWorkingDirectory = directory;
+			this.settings.defaultWorkingDirectory = this.workingDirectoryService.toStoredPath(directory);
 			this.settings.useVaultRootAsDefault = false;
 			await this.saveSettings();
 			for (const leaf of this.app.workspace.getLeavesOfType(CODEX_HISTORY_VIEW_TYPE)) if (leaf.view instanceof CodexHistoryView) await leaf.view.setWorkingDirectory(directory);
@@ -60,8 +65,12 @@ export default class CodexHistoryPlugin extends Plugin {
 	}
 
 	getInitialWorkingDirectory(): string | undefined {
-		if (!this.settings.useVaultRootAsDefault && this.settings.defaultWorkingDirectory) return this.settings.defaultWorkingDirectory;
+		if (!this.settings.useVaultRootAsDefault && this.settings.defaultWorkingDirectory) return this.workingDirectoryService.resolve(this.settings.defaultWorkingDirectory);
 		return this.workingDirectoryService.getVaultRoot() ?? (this.settings.defaultWorkingDirectory || undefined);
+	}
+
+	toStoredWorkingDirectory(value: string): string {
+		return this.workingDirectoryService.toStoredPath(value);
 	}
 
 	getHistoryErrors(): HistoryLoadError[] { return this.historyProvider.getErrors(); }
