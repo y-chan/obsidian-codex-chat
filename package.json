@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-codex-history",
+	"name": "obsidian-codex-chat",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Chat with Codex and continue local Codex sessions inside Obsidian.",
 	"main": "main.js",
 	"type": "module",
 	"packageManager": "pnpm@10.33.0",

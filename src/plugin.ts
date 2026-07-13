@@ -3,9 +3,9 @@ import { normalizeSettings, CodexHistorySettingTab, CodexHistorySettings } from 
 import { Logger } from './utils/logger';
 import { WorkingDirectoryService } from './services/WorkingDirectoryService';
 import { CodexHistoryService } from './services/CodexHistoryService';
-import { CodexChatService } from './services/CodexChatService';
+import { CodexAppServerService } from './services/CodexAppServerService';
 import { LocalCodexHistoryProvider } from './providers/LocalCodexHistoryProvider';
-import { CodexHistoryView, CODEX_HISTORY_VIEW_TYPE } from './views/CodexHistoryView';
+import { CodexHistoryView, CODEX_CHAT_ICON, CODEX_HISTORY_VIEW_TYPE } from './views/CodexHistoryView';
 import type { HistoryLoadError } from './types/codex';
 
 export default class CodexHistoryPlugin extends Plugin {
@@ -13,21 +13,26 @@ export default class CodexHistoryPlugin extends Plugin {
 	private workingDirectoryService!: WorkingDirectoryService;
 	private historyProvider!: LocalCodexHistoryProvider;
 	private historyService!: CodexHistoryService;
-	private chatService!: CodexChatService;
+	private chatService!: CodexAppServerService;
 
 	async onload(): Promise<void> {
 		this.settings = normalizeSettings((await this.loadData()) as Partial<CodexHistorySettings>);
 		this.workingDirectoryService = new WorkingDirectoryService(this.app);
 		this.historyProvider = new LocalCodexHistoryProvider({ historyPath: this.settings.historyPath, autoDiscoverHistory: this.settings.autoDiscoverHistory, maxSessions: this.settings.maxSessions, maxMessagesPerSession: this.settings.maxMessagesPerSession, logger: new Logger(this.settings.debugLogging) });
 		this.historyService = new CodexHistoryService(this.historyProvider);
-		this.chatService = new CodexChatService(this.settings.model);
+		this.chatService = new CodexAppServerService(this.settings.model, () => this.settings.historyPath);
 		this.registerView(CODEX_HISTORY_VIEW_TYPE, (leaf) => new CodexHistoryView(leaf, this.historyService, this.workingDirectoryService, this.chatService, this));
 		this.addSettingTab(new CodexHistorySettingTab(this.app, this));
-		this.addRibbonIcon('history', 'Open Codex History', () => void this.openHistoryView());
-		this.addCommand({ id: 'open-codex-history', name: 'Open Codex History', callback: () => void this.openHistoryView() });
-		this.addCommand({ id: 'reload-codex-history', name: 'Reload Codex History', callback: () => void this.reloadHistory() });
+		this.addRibbonIcon(CODEX_CHAT_ICON, 'Open Codex Chat', () => void this.openHistoryView());
+		this.addCommand({ id: 'open-codex-history', name: 'Open Codex Chat', callback: () => void this.openHistoryView() });
+		this.addCommand({ id: 'reload-codex-history', name: 'Reload Codex sessions', callback: () => void this.reloadHistory() });
+		this.addCommand({ id: 'send-current-codex-message', name: 'Send current Codex message', hotkeys: [{ modifiers: ['Mod'], key: 'Enter' }], callback: () => document.dispatchEvent(new Event('codex-history-send')) });
 		this.addCommand({ id: 'use-vault-root-as-codex-working-directory', name: 'Use vault root as Codex working directory', callback: () => void this.useWorkingDirectory(this.workingDirectoryService.getVaultRoot()) });
 		this.addCommand({ id: 'use-current-file-directory-as-codex-working-directory', name: 'Use current file directory as Codex working directory', callback: () => void this.useWorkingDirectory(this.workingDirectoryService.getCurrentFileDirectory()) });
+	}
+
+	onunload(): void {
+		this.chatService?.dispose();
 	}
 
 	async openHistoryView(): Promise<void> {

@@ -3,15 +3,15 @@ export class Logger {
 
 	info(message: string, details?: unknown): void {
 		if (!this.enabled) return;
-		console.warn(`[Codex History] ${message}`, details ?? '');
+		console.warn(`[Codex Chat] ${message}`, details ?? '');
 	}
 
 	debug(message: string, details?: unknown): void {
 		if (!this.enabled) return;
-		console.debug(`[Codex History] ${message}`, details ?? '');
+		console.debug(`[Codex Chat] ${message}`, details ?? '');
 	}
 
 	warn(message: string, details?: unknown): void {
-		console.warn(`[Codex History] ${message}`, details ?? '');
+		console.warn(`[Codex Chat] ${message}`, details ?? '');
 	}
 }

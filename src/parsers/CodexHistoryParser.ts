@@ -45,7 +45,7 @@ export function parseCodexHistoryText(text: string, sourcePath: string, fallback
 	const normalizedRecords = records.filter(isRecord);
 	const meta = findSessionMeta(normalizedRecords) ?? normalizedRecords.find((record) => Boolean(firstString(record.id, record.session_id, record.conversation_id)));
 	const id = firstString(meta?.id, meta?.session_id, meta?.conversation_id) ?? fileId(sourcePath);
-	const threadSource = firstString(meta?.thread_source);
+	const threadSource = firstString(meta?.thread_source) ?? appServerUserThreadSource(meta);
 	const parentThreadId = firstString(meta?.parent_thread_id);
 	const agentNickname = firstString(meta?.agent_nickname);
 	const messages: CodexMessage[] = [];
@@ -115,6 +115,11 @@ function findSessionMeta(records: JsonRecord[]): JsonRecord | undefined {
 
 function isSessionMeta(record: JsonRecord, payload: JsonRecord): boolean {
 	return record.type === 'session_meta' || payload.type === 'session_meta' || payload.type === 'sessionMeta';
+}
+
+function appServerUserThreadSource(meta: JsonRecord | undefined): string | undefined {
+	const originator = firstString(meta?.originator);
+	return originator === 'obsidian-codex-chat' || originator === 'obsidian-codex-history' ? 'user' : undefined;
 }
 
 function recordToMessage(record: JsonRecord, payload: JsonRecord, timestamp: string | undefined, index: number): CodexMessage | undefined {
@@ -192,8 +197,12 @@ function responseItemText(payload: JsonRecord): string {
 function formatToolCall(name: string | undefined, rawValue: unknown): string {
 	const raw = typeof rawValue === 'string' ? rawValue : stringifyValue(rawValue);
 	const parsed = parseJsonRecord(raw);
-	const patch = name === 'apply_patch' ? (parsed?.input ?? parsed?.arguments ?? raw) : undefined;
-	if (typeof patch === 'string' && patch.includes('*** Begin Patch')) return fencedCode('diff', patch);
+	const patch = name === 'apply_patch'
+		? (parsed?.input ?? parsed?.arguments ?? raw)
+		: name === 'exec'
+			? extractEmbeddedPatch(typeof parsed?.input === 'string' ? parsed.input : raw)
+			: undefined;
+	if (typeof patch === 'string' && patch.includes('Begin Patch')) return fencedCode('diff', normalizePatchMarkers(patch));
 
 	const command = typeof parsed?.command === 'string' ? parsed.command : name === 'exec' ? extractStringProperty(raw, 'command') : undefined;
 	if (command) return fencedCode('sh', command);
@@ -201,6 +210,24 @@ function formatToolCall(name: string | undefined, rawValue: unknown): string {
 	if (typeof parsed?.input === 'string') return parsed.input;
 	if (name === 'apply_patch' && raw) return fencedCode('diff', raw);
 	return raw;
+}
+
+function extractEmbeddedPatch(value: string): string | undefined {
+	const match = /(?:const|let|var)\s+patch\s*=\s*("(?:\\.|[^"\\])*")/s.exec(value);
+	if (!match?.[1]) return undefined;
+	try {
+		const patch = JSON.parse(match[1]) as string;
+		return patch.includes('Begin Patch') && patch.includes('End Patch') ? patch : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function normalizePatchMarkers(value: string): string {
+	return value
+		.replace(/^\s*\*{0,3}\s*Begin Patch\s*$/m, '*** Begin Patch')
+		.replace(/^\s*\*{0,3}\s*(Update|Add|Delete) File:/gm, '*** $1 File:')
+		.replace(/^\s*\*{0,3}\s*End Patch\s*$/m, '*** End Patch');
 }
 
 function parseJsonRecord(value: string): JsonRecord | undefined {

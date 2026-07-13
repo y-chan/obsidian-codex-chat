@@ -1,9 +1,9 @@
 {
-	"id": "obsidian-codex-history",
-	"name": "Codex History",
+	"id": "obsidian-codex-chat",
+	"name": "Codex Chat",
 	"version": "1.0.0",
 	"minAppVersion": "1.7.2",
-	"description": "Browse local Codex execution history inside Obsidian.",
-	"author": "Codex History contributors",
+	"description": "Chat with Codex and continue local Codex sessions inside Obsidian.",
+	"author": "Codex Chat contributors",
 	"isDesktopOnly": true
 }

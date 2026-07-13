@@ -1,6 +1,6 @@
-# Codex History for Obsidian
+# Codex Chat for Obsidian
 
-Codex History is a desktop-only Obsidian community plugin for browsing local Codex CLI and Codex Desktop execution history. It renders message Markdown through Obsidian's `MarkdownRenderer`, so Obsidian's normal Markdown and MathJax handling is used for headings, tables, code, and LaTeX.
+Codex Chat is a desktop-only Obsidian community plugin for chatting with Codex, continuing local sessions, and reviewing earlier conversations without leaving Obsidian. It renders message Markdown through Obsidian's `MarkdownRenderer`, so Obsidian's normal Markdown and MathJax handling is used for headings, tables, code, and LaTeX.
 
 ## Scope and security
 
@@ -12,7 +12,7 @@ Codex History is a desktop-only Obsidian community plugin for browsing local Cod
 
 ## Installation
 
-Build the plugin, then copy `main.js`, `manifest.json`, and `styles.css` to `<Vault>/.obsidian/plugins/obsidian-codex-history/`, reload Obsidian, and enable it in **Settings → Community plugins**.
+Build the plugin, then copy `main.js`, `manifest.json`, and `styles.css` to `<Vault>/.obsidian/plugins/obsidian-codex-chat/`, reload Obsidian, and enable **Codex Chat** in **Settings → Community plugins**.
 
 ## Development
 
@@ -26,7 +26,7 @@ pnpm run build
 
 ## Working directory
 
-Open **Open Codex History** from the Command Palette or the ribbon. The view accepts an absolute path, can use the local vault root, and can use the parent directory of the active file. A directory must exist and must be a directory. The default can also be configured in **Settings → Codex History**.
+Open **Open Codex Chat** from the Command Palette or the ribbon. Choose a working directory, start a new conversation, or continue a session from the session list. The view accepts an absolute path, can use the local vault root, and can use the parent directory of the active file. The default can also be configured in **Settings → Codex Chat**.
 
 ## History discovery and formats
 

@@ -3,10 +3,11 @@ import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { CodexHistoryService } from '../services/CodexHistoryService';
 import { WorkingDirectoryService } from '../services/WorkingDirectoryService';
-import { CodexChatService } from '../services/CodexChatService';
+import { CodexAppServerService } from '../services/CodexAppServerService';
 import { CodexHistoryApp, type CodexHistoryAppHandle } from '../ui/CodexHistoryApp';
 
 export const CODEX_HISTORY_VIEW_TYPE = 'codex-history-view';
+export const CODEX_CHAT_ICON = 'message-circle';
 
 export interface CodexHistoryViewHost {
 	getInitialWorkingDirectory(): string | undefined;
@@ -20,14 +21,15 @@ export class CodexHistoryView extends ItemView {
 		leaf: WorkspaceLeaf,
 		private readonly historyService: CodexHistoryService,
 		private readonly workingDirectoryService: WorkingDirectoryService,
-		private readonly chatService: CodexChatService,
+		private readonly chatService: CodexAppServerService,
 		private readonly host: CodexHistoryViewHost,
 	) {
 		super(leaf);
 	}
 
 	getViewType(): string { return CODEX_HISTORY_VIEW_TYPE; }
-	getDisplayText(): string { return 'Codex history'; }
+	getDisplayText(): string { return 'Codex Chat'; }
+	getIcon(): string { return CODEX_CHAT_ICON; }
 
 	async onOpen(): Promise<void> {
 		this.reactRoot = createRoot(this.contentEl);

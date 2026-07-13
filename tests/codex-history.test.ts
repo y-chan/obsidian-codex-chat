@@ -66,6 +66,21 @@ void test('reads thread_source from session metadata', () => {
 	assert.equal(parsed.threadSource, 'user');
 });
 
+void test('recognizes app-server sessions created by this plugin', () => {
+	for (const originator of ['obsidian-codex-chat', 'obsidian-codex-history']) {
+		const parsed = parseCodexHistoryText(JSON.stringify({
+			type: 'session_meta',
+			payload: {
+				id: 'app-server-session',
+				originator,
+				source: 'vscode',
+				cwd: 'C:\\work\\demo',
+			},
+		}), 'rollout-app-server.jsonl');
+		assert.equal(parsed.threadSource, 'user');
+	}
+});
+
 void test('merges tool call output and extracts spawned subagent id', () => {
 	const text = [
 		JSON.stringify({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'call-1', name: 'exec', input: 'tools.multi_agent_v1__spawn_agent({})' } }),
@@ -88,6 +103,15 @@ void test('formats patch and shell tool calls as their meaningful content', () =
 	assert.match(parsed.session.messages[0]?.markdown ?? '', /Update File: note\.md/);
 	assert.doesNotMatch(parsed.session.messages[0]?.markdown ?? '', /"name"/);
 	assert.equal(parsed.session.messages[1]?.markdown, '```sh\npnpm test\n```');
+});
+
+void test('extracts an apply_patch payload embedded in an exec call', () => {
+	const patch = ['*** Begin Patch', '*** Update File: note.md', '@@', '-old', '+new', '*** End Patch'].join('\n');
+	const execInput = `const patch = ${JSON.stringify(patch)};\ntext(await tools.apply_patch(patch));`;
+	const text = JSON.stringify({ type: 'response_item', payload: { type: 'custom_tool_call', name: 'exec', input: execInput } });
+	const parsed = parseCodexHistoryText(text, 'embedded-patch.jsonl');
+	assert.match(parsed.session.messages[0]?.markdown ?? '', /```diff/);
+	assert.match(parsed.session.messages[0]?.markdown ?? '', /Update File: note\.md/);
 });
 
 void test('hides system prompts, AGENTS instructions, and tool JSON', () => {

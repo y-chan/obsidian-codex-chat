@@ -4,7 +4,8 @@ import type { CodexMessage, CodexSession, CodexSessionSummary } from '../types/c
 import { filterSessionSummaries } from '../parsers/CodexHistoryParser';
 import { CodexHistoryService } from '../services/CodexHistoryService';
 import { WorkingDirectoryService } from '../services/WorkingDirectoryService';
-import { CodexChatService, type ChatStreamUpdate } from '../services/CodexChatService';
+import { CodexAppServerService, type AppServerModel, type AppServerUpdate, type ApprovalDecision, type ThinkingEffort, type UsageStatus } from '../services/CodexAppServerService';
+import { decorateDiffBlocks, normalizeToolMarkdown } from './diff';
 
 export interface CodexHistoryAppHandle {
 	reload: () => Promise<void>;
@@ -15,7 +16,7 @@ interface CodexHistoryAppProps {
 	app: App;
 	historyService: CodexHistoryService;
 	workingDirectoryService: WorkingDirectoryService;
-	chatService: CodexChatService;
+	chatService: CodexAppServerService;
 	initialWorkingDirectory: string | undefined;
 }
 
@@ -34,15 +35,41 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 	const [chatMessages, setChatMessages] = useState<CodexMessage[]>([]);
 	const [chatThreadId, setChatThreadId] = useState<string>();
 	const [isSending, setIsSending] = useState(false);
+	const [pendingApproval, setPendingApproval] = useState<AppServerUpdate>();
+	const [availableModels, setAvailableModels] = useState<AppServerModel[]>([]);
+	const [selectedModel, setSelectedModel] = useState(() => chatService.getModel());
+	const [selectedEffort, setSelectedEffort] = useState<ThinkingEffort>(() => chatService.getThinkingEffort());
 	const abortControllerRef = useRef<AbortController>();
+	const sendingRef = useRef(false);
 	const [error, setError] = useState<string>();
 	const [status, setStatus] = useState('');
+	const [usageStatus, setUsageStatus] = useState<UsageStatus>();
 	const loadGeneration = useRef(0);
 	const sessionGeneration = useRef(0);
 
+	useEffect(() => {
+		setSelectedModel(chatService.getModel());
+		setSelectedEffort(chatService.getThinkingEffort());
+		void chatService.listModels().then(setAvailableModels).catch(() => setAvailableModels([]));
+		const refreshUsage = () => { void chatService.getUsageStatus().then((next) => setUsageStatus((current) => ({ ...current, ...next }))).catch(() => undefined); };
+		refreshUsage();
+		const interval = window.setInterval(refreshUsage, 60_000);
+		return () => window.clearInterval(interval);
+	}, [chatService]);
+
+	const changeModel = useCallback((model: string): void => {
+		setSelectedModel(model);
+		chatService.setModel(model);
+	}, [chatService]);
+
+	const changeEffort = useCallback((effort: ThinkingEffort): void => {
+		setSelectedEffort(effort);
+		chatService.setThinkingEffort(effort);
+	}, [chatService]);
+
 	const load = useCallback(async (directory: string): Promise<void> => {
 		if (!directory) {
-			setError('Set a working directory to load Codex history.');
+			setError('Set a working directory to load Codex sessions.');
 			return;
 		}
 		const generation = ++loadGeneration.current;
@@ -81,7 +108,7 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 	useEffect(() => {
 		let active = true;
 		if (!initialWorkingDirectory) {
-			setError('Set a working directory to load Codex history.');
+			setError('Set a working directory to load Codex sessions.');
 			return () => { active = false; };
 		}
 		void workingDirectoryService.validate(initialWorkingDirectory).then((validated) => {
@@ -98,6 +125,7 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 		const generation = ++sessionGeneration.current;
 		setSelectedSessionId(sessionId);
 		setSelectedSession(undefined);
+		setUsageStatus((current) => current ? { ...current, contextRemainingPercent: undefined } : current);
 		setIsLoadingSession(true);
 		try {
 			const session = await historyService.getSession(workingDirectory, sessionId);
@@ -105,20 +133,42 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 				setSelectedSession(session);
 				setChatThreadId(session.id);
 				setChatMessages(session.messages);
+				void chatService.getThreadContextUsage(session.id, workingDirectory).then((contextRemainingPercent) => {
+					if (generation === sessionGeneration.current && contextRemainingPercent !== undefined) setUsageStatus((current) => ({ ...current, contextRemainingPercent }));
+				}).catch(() => undefined);
 			}
 		} catch (sessionError) {
 			if (generation === sessionGeneration.current) setError(toErrorMessage(sessionError));
 		} finally {
 			if (generation === sessionGeneration.current) setIsLoadingSession(false);
 		}
-	}, [historyService, workingDirectory]);
+	}, [chatService, historyService, workingDirectory]);
 
 	const sendMessage = useCallback(async (prompt: string, images: string[] = []): Promise<void> => {
 		const trimmedPrompt = prompt.trim();
-		if (!trimmedPrompt || !workingDirectory || isSending) return;
+		if (!trimmedPrompt || !workingDirectory) return;
+		if (sendingRef.current) {
+			const userMessage: CodexMessage = {
+				id: `chat-user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+				role: 'user',
+				markdown: trimmedPrompt,
+				createdAt: new Date().toISOString(),
+			};
+			setChatMessages((current) => [...current, userMessage]);
+			setSelectedSession((current) => current ?? { id: chatThreadId ?? 'new-chat', title: trimmedPrompt, messages: [] });
+			try {
+				await chatService.steer({ workingDirectory, threadId: chatThreadId, prompt: trimmedPrompt, images });
+				setStatus('Follow-up added.');
+			} catch (steerError) {
+				setError(toErrorMessage(steerError));
+				setStatus('Could not add follow-up.');
+			}
+			return;
+		}
+		sendingRef.current = true;
 		const userMessage: CodexMessage = {
-			id: `chat-user-${Date.now()}`,
-			role: 'user',
+			id: `chat-user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+			role: 'user' as const,
 			markdown: trimmedPrompt,
 			createdAt: new Date().toISOString(),
 		};
@@ -130,7 +180,16 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 		const abortController = new AbortController();
 		abortControllerRef.current = abortController;
 		let streamedAssistantId: string | undefined;
-		const applyStreamUpdate = (update: ChatStreamUpdate): void => {
+		const applyStreamUpdate = (update: AppServerUpdate): void => {
+			if (update.kind === 'usage') {
+				if (update.usage) setUsageStatus((current) => ({ ...current, ...update.usage }));
+				return;
+			}
+			if (update.kind === 'approval') {
+				setPendingApproval(update);
+				setStatus('Approval required.');
+				return;
+			}
 			if (update.kind === 'status') {
 				setStatus(update.text);
 				return;
@@ -173,14 +232,27 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 				setStatus('Codex failed.');
 			}
 		} finally {
+			setPendingApproval(undefined);
 			abortControllerRef.current = undefined;
+			sendingRef.current = false;
 			setIsSending(false);
 		}
-	}, [chatService, chatThreadId, isSending, workingDirectory]);
+	}, [chatService, chatThreadId, workingDirectory]);
 
 	const stopMessage = useCallback((): void => {
 		abortControllerRef.current?.abort();
 	}, []);
+
+	const startNewChat = useCallback((): void => {
+		stopMessage();
+		setSelectedSessionId(undefined);
+		setSelectedSession(undefined);
+		setChatThreadId(undefined);
+		setChatMessages([]);
+		setUsageStatus((current) => current ? { ...current, contextRemainingPercent: undefined } : current);
+		setPendingApproval(undefined);
+		setStatus('New chat.');
+	}, [stopMessage]);
 
 	const displaySession = selectedSession
 		? { ...selectedSession, messages: chatMessages }
@@ -197,18 +269,23 @@ export const CodexHistoryApp = forwardRef<CodexHistoryAppHandle, CodexHistoryApp
 					onChange={setWorkingDirectory}
 					onError={setError}
 				/>
-				<IconButton icon="refresh-cw" label="Reload Codex history" className="codex-history-reload" onClick={() => void reload()} disabled={isLoading}>
+				<IconButton icon="refresh-cw" label="Reload Codex sessions" className="codex-history-reload" onClick={() => void reload()} disabled={isLoading}>
 					Reload
 				</IconButton>
 			</div>
 			{error && <div className="codex-history-error">{error}</div>}
 			{status && !error && !isSending && <div className="codex-history-status">{isLoading && <span className="codex-history-status-indicator" aria-hidden="true" />}{status}</div>}
 			<div className="codex-history-content">
-				<IconButton icon="list" label={isSessionListOpen ? 'Hide sessions' : 'Show sessions'} className="codex-history-session-toggle" onClick={() => setIsSessionListOpen((open) => !open)} />
+				<div className="codex-history-content-actions">
+					<IconButton icon="messages-square" label={isSessionListOpen ? 'Hide sessions' : 'Show sessions'} className="codex-history-session-toggle" onClick={() => setIsSessionListOpen((open) => !open)} />
+					<IconButton icon="message-circle-plus" label="New chat" className="codex-history-new-chat" onClick={startNewChat} />
+					<ModelSelector value={selectedModel} models={availableModels} onChange={changeModel} />
+					<ThinkingEffortSelector value={selectedEffort} onChange={changeEffort} />
+				</div>
 				<div className="codex-history-split">
 					{isSessionListOpen && <div aria-hidden="true" className="codex-history-list-backdrop" onClick={() => setIsSessionListOpen(false)} />}
 					<SessionListPane open={isSessionListOpen} sessions={sessions} selectedId={selectedSessionId} query={searchQuery} onSearch={setSearchQuery} onSelect={(id) => { setIsSessionListOpen(false); void selectSession(id); }} />
-				<SessionDetailPane app={app} session={displaySession} loading={isLoadingSession} error={selectedSessionId && !isLoadingSession && !selectedSession ? error : undefined} status={isSending ? status : undefined} isSending={isSending} onSend={sendMessage} onStop={stopMessage} />
+			<SessionDetailPane app={app} session={displaySession} loading={isLoadingSession} error={selectedSessionId && !isLoadingSession && !selectedSession ? error : undefined} status={isSending ? status : undefined} usage={usageStatus} approval={pendingApproval} isSending={isSending} onSend={sendMessage} onStop={stopMessage} onApproval={(decision) => { pendingApproval?.decision?.(decision); setPendingApproval(undefined); }} />
 				</div>
 			</div>
 		</div>
@@ -273,10 +350,12 @@ function WorkingDirectorySelector({ service, initialValue, onChange, onError }: 
 	};
 
 	const chooseDirectory = (event: ChangeEvent<HTMLInputElement>): void => {
-		const file = event.target.files?.[0] as (File & { path?: string; webkitRelativePath?: string }) | undefined;
-		const absolutePath = file?.path;
+		const file = event.target.files?.[0];
+		const absolutePath = file ? (file as File & { path?: string }).path : undefined;
 		const relativePath = file?.webkitRelativePath?.replaceAll('/', '\\');
 		if (!absolutePath || !relativePath) {
+			setStatus('Could not determine the selected folder path.');
+			setIsError(true);
 			event.target.value = '';
 			return;
 		}
@@ -289,6 +368,22 @@ function WorkingDirectorySelector({ service, initialValue, onChange, onError }: 
 		usePath(directory);
 	};
 
+	const openDirectoryPicker = async (): Promise<void> => {
+		const dialog = getNativeDirectoryDialog();
+		if (!dialog) {
+			directoryInputRef.current?.click();
+			return;
+		}
+		try {
+			const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+			if (!result.canceled && result.filePaths[0]) usePath(result.filePaths[0]);
+		} catch (pickerError) {
+			setStatus(toErrorMessage(pickerError));
+			setIsError(true);
+			onError(toErrorMessage(pickerError));
+		}
+	};
+
 	return (
 		<div className="codex-history-working-directory">
 			<form onSubmit={submit}>
@@ -299,11 +394,26 @@ function WorkingDirectorySelector({ service, initialValue, onChange, onError }: 
 			</form>
 			<div className="codex-history-directory-actions">
 				<input ref={directoryInputRef} className="codex-history-file-input" type="file" onChange={chooseDirectory} />
-				<IconButton icon="folder-open" label="Choose working directory" onClick={() => directoryInputRef.current?.click()} />
+				<IconButton icon="folder-open" label="Choose working directory" onClick={() => void openDirectoryPicker()} />
 			</div>
 			<div className={`codex-history-inline-status${isError ? ' mod-warning' : ''}`}>{status}</div>
 		</div>
 	);
+}
+
+interface NativeDirectoryDialog {
+	showOpenDialog: (options: { properties: string[] }) => Promise<{ canceled: boolean; filePaths: string[] }>;
+}
+
+function getNativeDirectoryDialog(): NativeDirectoryDialog | undefined {
+	try {
+		const windowWithRequire = window as Window & { require?: (moduleName: string) => unknown };
+		if (!windowWithRequire.require) return undefined;
+		const electron = windowWithRequire.require('electron') as { dialog?: NativeDirectoryDialog; remote?: { dialog?: NativeDirectoryDialog } };
+		return electron.remote?.dialog ?? electron.dialog;
+	} catch {
+		return undefined;
+	}
 }
 
 interface SessionListPaneProps {
@@ -334,18 +444,47 @@ function SessionListPane({ open, sessions, selectedId, query, onSearch, onSelect
 	);
 }
 
+function ModelSelector({ value, models, onChange }: { value: string; models: AppServerModel[]; onChange: (value: string) => void }) {
+	const hasCurrentModel = !value || models.some((model) => model.id === value);
+	return <label className="codex-history-model-selector" title="Model for new turns">
+		<span>Model</span>
+		<select value={value} onChange={(event) => onChange(event.target.value)}>
+			<option value="">CLI default</option>
+			{!hasCurrentModel && <option value={value}>{value}</option>}
+			{models.map((model) => <option key={model.id} value={model.id}>{model.displayName || model.id}</option>)}
+		</select>
+	</label>;
+}
+
+function ThinkingEffortSelector({ value, onChange }: { value: ThinkingEffort; onChange: (value: ThinkingEffort) => void }) {
+	return <label className="codex-history-effort-selector" title="Thinking effort for new turns">
+		<span>Thinking</span>
+		<select value={value} onChange={(event) => onChange(event.target.value as ThinkingEffort)}>
+			<option value="">CLI default</option>
+			<option value="minimal">Minimal</option>
+			<option value="low">Low</option>
+			<option value="medium">Medium</option>
+			<option value="high">High</option>
+			<option value="xhigh">Xhigh</option>
+		</select>
+	</label>;
+}
+
 interface SessionDetailPaneProps {
 	app: App;
 	session: CodexSession | undefined;
 	loading: boolean;
 	error: string | undefined;
 	status: string | undefined;
+	usage: UsageStatus | undefined;
+	approval: AppServerUpdate | undefined;
 	isSending: boolean;
 	onSend: (prompt: string, images?: string[]) => Promise<void>;
 	onStop: () => void;
+	onApproval: (decision: ApprovalDecision) => void;
 }
 
-function SessionDetailPane({ app, session, loading, error, status, isSending, onSend, onStop }: SessionDetailPaneProps) {
+function SessionDetailPane({ app, session, loading, error, status, usage, approval, isSending, onSend, onStop, onApproval }: SessionDetailPaneProps) {
 	const messagesRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -360,25 +499,44 @@ function SessionDetailPane({ app, session, loading, error, status, isSending, on
 
 	return (
 		<div className="codex-history-detail-pane">
-			{session && <div className="codex-history-detail-header"><h2>{session.title || 'Untitled session'}</h2><div className="codex-history-session-meta">{session.id}</div></div>}
+			<div className="codex-history-detail-header">
+				<div className="codex-history-detail-title-row">
+					<h2>{session?.title || 'New chat'}</h2>
+				</div>
+				{session && <div className="codex-history-session-meta">{session.id}</div>}
+			</div>
 			<div ref={messagesRef} className="codex-history-messages">
 				{loading ? <div className="codex-history-state">Loading session…</div> : error ? <div className="codex-history-error">{error}</div> : !session ? <div className="codex-history-state">Start a conversation with Codex.</div> : session.messages.length === 0 ? <div className="codex-history-empty">This session has no renderable messages.</div> : session.messages.map((message) => message.role === 'tool'
 					? <CollapsedCommand key={message.id} app={app} sessionId={session.id} message={message} />
 					: <MarkdownMessage key={message.id} app={app} sessionId={session.id} message={message} />)}
 			</div>
+			{approval && <ApprovalCard approval={approval} onDecision={onApproval} />}
 			{isSending && status && <div className="codex-history-composer-status"><span className="codex-history-status-indicator" aria-hidden="true" />{status.replace(/^Codex /, '')}</div>}
-			<ChatComposer disabled={loading} isSending={isSending} onSend={onSend} onStop={onStop} />
+			<ChatComposer disabled={loading} isSending={isSending} usage={usage} onSend={onSend} onStop={onStop} />
 		</div>
 	);
 }
 
-function ChatComposer({ disabled, isSending, onSend, onStop }: { disabled: boolean; isSending: boolean; onSend: (prompt: string, images?: string[]) => Promise<void>; onStop: () => void }) {
+function ApprovalCard({ approval, onDecision }: { approval: AppServerUpdate; onDecision: (decision: ApprovalDecision) => void }) {
+	return <div className="codex-history-approval-card">
+		<div className="codex-history-approval-title">Approval required</div>
+		<div className="codex-history-approval-kind">{approval.approvalKind === 'fileChange' ? 'File change' : 'Command'}</div>
+		<pre>{approval.text}</pre>
+		<div className="codex-history-approval-actions">
+			<button type="button" onClick={() => onDecision('accept')}>Approve</button>
+			<button type="button" onClick={() => onDecision('acceptForSession')}>Approve for session</button>
+			<button type="button" className="mod-warning" onClick={() => onDecision('decline')}>Decline</button>
+		</div>
+	</div>;
+}
+
+function ChatComposer({ disabled, isSending, usage, onSend, onStop }: { disabled: boolean; isSending: boolean; usage: UsageStatus | undefined; onSend: (prompt: string, images?: string[]) => Promise<void>; onStop: () => void }) {
 	const [value, setValue] = useState('');
 	const [images, setImages] = useState<string[]>([]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const submit = async (): Promise<void> => {
 		const prompt = value.trim();
-		if (!prompt || disabled || isSending) return;
+		if (!prompt || disabled) return;
 		setValue('');
 		const selectedImages = [...images];
 		setImages([]);
@@ -389,21 +547,48 @@ function ChatComposer({ disabled, isSending, onSend, onStop }: { disabled: boole
 		setImages((current) => [...current, ...paths]);
 		event.target.value = '';
 	};
+	useEffect(() => {
+		const handleCommand = (): void => {
+			if (document.activeElement instanceof HTMLTextAreaElement && document.activeElement.closest('.codex-history-composer')) void submit();
+		};
+		document.addEventListener('codex-history-send', handleCommand);
+		return () => document.removeEventListener('codex-history-send', handleCommand);
+	}, [disabled, isSending, value, images]);
 	return (
+		<div className="codex-history-composer-wrap">
 		<form className="codex-history-composer" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
 			<input ref={fileInputRef} className="codex-history-file-input" type="file" accept="image/*" multiple onChange={selectImages} />
-			<IconButton icon="paperclip" label="Attach images" className="codex-history-upload" onClick={() => fileInputRef.current?.click()} disabled={disabled || isSending} />
-			<textarea value={value} disabled={disabled || isSending} placeholder="Ask Codex…" rows={3} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => {
-				if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-					event.preventDefault();
-					event.currentTarget.form?.requestSubmit();
-				}
-			}} />
-			{isSending ? <IconButton icon="square" label="Stop" className="codex-history-stop" onClick={onStop} /> : <IconButton icon="arrow-up" label="Send" className="codex-history-send" onClick={() => void submit()} disabled={disabled || !value.trim()} />}
+			<IconButton icon="paperclip" label="Attach images" className="codex-history-upload" onClick={() => fileInputRef.current?.click()} disabled={disabled} />
+			<textarea value={value} disabled={disabled} placeholder={isSending ? 'Add a follow-up…' : 'Ask Codex…'} rows={3} onChange={(event) => setValue(event.target.value)} />
+			{isSending && <IconButton icon="square" label="Stop" className="codex-history-stop" onClick={onStop} />}
+			<IconButton icon="arrow-up" label={isSending ? 'Queue follow-up' : 'Send'} className="codex-history-send" onClick={() => void submit()} disabled={disabled || !value.trim()} />
 			{images.length > 0 && <span className="codex-history-attachment-count">{images.length} image{images.length === 1 ? '' : 's'}</span>}
 		</form>
+			<UsageBar usage={usage} />
+		</div>
 	);
 }
+
+function UsageBar({ usage }: { usage: UsageStatus | undefined }) {
+	if (!usage || (!usage.accountName && !usage.plan && usage.contextRemainingPercent === undefined && !usage.fiveHour && !usage.weekly)) return null;
+	return <div className="codex-history-usage" aria-label="Codex usage status">
+		<div className="codex-history-usage-account" title={usage.accountName}>{usage.accountName ?? 'Codex'}{usage.plan ? ` (${usage.plan})` : ''}</div>
+		<UsageMetric label="Context Window Remain" value={formatPercent(usage.contextRemainingPercent)} percent={usage.contextRemainingPercent} />
+		{usage.fiveHour && <UsageMetric label="5h limit" value={formatPercent(usage.fiveHour.remainingPercent)} percent={usage.fiveHour.remainingPercent} />}
+		{usage.weekly && <UsageMetric label="Weekly limit" value={formatPercent(usage.weekly.remainingPercent)} percent={usage.weekly.remainingPercent} />}
+	</div>;
+}
+
+function UsageMetric({ label, value, percent }: { label: string; value: string | undefined; percent: number | undefined }) {
+	if (!value) return null;
+	return <div className="codex-history-usage-metric" title={label}>
+		<span className="codex-history-usage-label">{label}</span>
+		<span className="codex-history-usage-value">{value}</span>
+		<span className="codex-history-usage-track"><span style={{ width: `${percent ?? 0}%` }} /></span>
+	</div>;
+}
+
+function formatPercent(value: number | undefined): string | undefined { return value === undefined ? undefined : `${value}%`; }
 
 function CollapsedCommand({ app, sessionId, message }: { app: App; sessionId: string; message: CodexMessage }) {
 	return (
@@ -434,6 +619,7 @@ function MarkdownMessage({ app, sessionId, message }: { app: App; sessionId: str
 		if (!body) return;
 		const component = new Component();
 		setRenderError(undefined);
+		const toolName = typeof message.metadata?.toolName === 'string' ? message.metadata.toolName : undefined;
 		const handleLinkClick = (event: MouseEvent): void => {
 			const target = event.target instanceof HTMLElement ? event.target.closest('a') : null;
 			const href = target?.getAttribute('href') ?? '';
@@ -450,7 +636,9 @@ function MarkdownMessage({ app, sessionId, message }: { app: App; sessionId: str
 			void app.workspace.openLinkText(decodeURIComponent(pathPart), '', false);
 		};
 		body.addEventListener('click', handleLinkClick);
-		void MarkdownRenderer.render(app, message.markdown, body, sessionId, component).catch((error: unknown) => setRenderError(toErrorMessage(error)));
+		void MarkdownRenderer.render(app, normalizeToolMarkdown(message.markdown, toolName), body, sessionId, component)
+			.then(() => decorateDiffBlocks(body))
+			.catch((error: unknown) => setRenderError(toErrorMessage(error)));
 		return () => {
 			body.removeEventListener('click', handleLinkClick);
 			component.unload();

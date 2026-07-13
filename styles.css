@@ -76,6 +76,7 @@ If your plugin does not need CSS, delete this file.
 	min-width: 0;
 	min-height: 0;
 	overflow: auto;
+	container-type: inline-size;
 }
 
 .codex-history-content {
@@ -84,11 +85,20 @@ If your plugin does not need CSS, delete this file.
 	min-height: 0;
 }
 
-button.codex-history-session-toggle {
+.codex-history-content-actions {
 	position: absolute;
 	top: var(--size-4-2);
+	right: var(--size-4-3);
 	left: var(--size-4-3);
 	z-index: 12;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	min-height: var(--size-4-8);
+}
+
+button.codex-history-session-toggle {
+	position: static;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -99,6 +109,38 @@ button.codex-history-session-toggle {
 	padding: 0 !important;
 	line-height: 1;
 	box-sizing: border-box;
+}
+
+button.codex-history-new-chat {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--size-4-8);
+	height: var(--size-4-8);
+	min-width: var(--size-4-8);
+	min-height: var(--size-4-8);
+	padding: 0 !important;
+	line-height: 1;
+	box-sizing: border-box;
+}
+
+.codex-history-model-selector,
+.codex-history-effort-selector {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-left: auto;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.codex-history-effort-selector {
+	margin-left: 0;
+}
+
+.codex-history-model-selector select,
+.codex-history-effort-selector select {
+	max-width: min(18rem, 42vw);
 }
 
 .codex-history-list-pane {
@@ -261,6 +303,10 @@ button.codex-history-session-toggle {
 	box-shadow: var(--shadow-s);
 }
 
+.codex-history-composer-wrap {
+	flex: 0 0 auto;
+}
+
 .codex-history-composer textarea {
 	flex: 1;
 	min-width: 0;
@@ -314,6 +360,57 @@ button.codex-history-session-toggle {
 	padding: var(--size-4-1) var(--size-4-2) 0;
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-usage {
+	display: grid;
+	grid-template-columns: minmax(8rem, 1.2fr) repeat(3, minmax(7rem, 1fr));
+	gap: var(--size-4-2);
+	align-items: center;
+	padding: var(--size-4-1) var(--size-4-2) 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.codex-history-usage-account {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.codex-history-usage-metric {
+	display: grid;
+	grid-template-columns: auto auto;
+	gap: 0 var(--size-4-1);
+	min-width: 0;
+}
+
+.codex-history-usage-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.codex-history-usage-value {
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.codex-history-usage-track {
+	display: block;
+	grid-column: 1 / -1;
+	height: 3px;
+	margin-top: 2px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--background-modifier-border);
+}
+
+.codex-history-usage-track span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--interactive-accent);
 }
 
 .codex-history-message {
@@ -441,4 +538,49 @@ button.codex-history-session-toggle {
 	.codex-history-toolbar { flex-wrap: wrap; }
 	.codex-history-list-pane { width: 100%; border-right: 0; }
 	.codex-history-detail-pane { flex: 1; }
+}
+
+@container (max-width: 520px) {
+	.codex-history-usage {
+		grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+		gap: var(--size-4-1);
+	}
+	.codex-history-usage-label,
+	.codex-history-usage-track { display: none; }
+	.codex-history-usage-metric { display: block; }
+}
+
+/* Diff output from apply_patch and exec. */
+.codex-history-command pre code.language-diff,
+.codex-history-command pre code.language-patch {
+	display: block;
+	padding: 0.5em 0;
+}
+
+.codex-history-diff-line {
+	display: inline-block;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 1.35em;
+	padding: 0 0.75em;
+}
+
+.codex-history-diff-add {
+	background: color-mix(in srgb, var(--color-green) 16%, transparent);
+	color: var(--text-success);
+}
+
+.codex-history-diff-remove {
+	background: color-mix(in srgb, var(--color-red) 16%, transparent);
+	color: var(--text-error);
+}
+
+.codex-history-diff-file {
+	background: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	font-weight: 600;
+}
+
+.codex-history-diff-hunk {
+	background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	color: var(--text-accent);
 }

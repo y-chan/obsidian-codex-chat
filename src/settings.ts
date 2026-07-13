@@ -45,12 +45,11 @@ export class CodexHistorySettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		new Setting(containerEl).setName('History').setHeading();
 		new Setting(containerEl).setName('Model').setDesc('Optional Codex model ID. Leave empty to use the CLI default.').addText((text) => text.setPlaceholder('Use CLI default').setValue(this.plugin.settings.model).onChange(async (value) => {
 			this.plugin.settings.model = value.trim(); await this.plugin.saveSettings();
 		}));
 
-		new Setting(containerEl).setName('Default working directory').setDesc('Used when a history view is opened.').addText((text) => text.setPlaceholder('C:\\Users\\name\\project').setValue(this.plugin.settings.defaultWorkingDirectory).onChange(async (value) => {
+		new Setting(containerEl).setName('Default working directory').setDesc('Used when Codex Chat is opened.').addText((text) => text.setPlaceholder('C:\\Users\\name\\project').setValue(this.plugin.settings.defaultWorkingDirectory).onChange(async (value) => {
 			this.plugin.settings.defaultWorkingDirectory = value.trim(); await this.plugin.saveSettings();
 		}));
 		new Setting(containerEl).setName('Use vault root by default').setDesc('Use the local vault root when no explicit directory is set.').addToggle((toggle) => toggle.setValue(this.plugin.settings.useVaultRootAsDefault).onChange(async (value) => {
