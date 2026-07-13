@@ -7,6 +7,7 @@ import { CodexHistoryService } from '../services/CodexHistoryService';
 import { WorkingDirectoryService } from '../services/WorkingDirectoryService';
 import { CodexAppServerService, type AppServerModel, type AppServerUpdate, type ApprovalDecision, type ThinkingEffort, type UsageStatus } from '../services/CodexAppServerService';
 import { decorateDiffBlocks, normalizeToolMarkdown } from './diff';
+import { normalizeMathDelimiters } from './markdown';
 import { normalizeFilesystemPath } from '../utils/paths';
 
 export interface CodexHistoryAppHandle {
@@ -661,7 +662,8 @@ function MarkdownMessage({ app, sessionId, message }: { app: App; sessionId: str
 			openHistoryFileLink(app, pathPart);
 		};
 		body.addEventListener('click', handleLinkClick);
-		void MarkdownRenderer.render(app, normalizeToolMarkdown(message.markdown, toolName), body, sessionId, component)
+		const markdown = normalizeMathDelimiters(normalizeToolMarkdown(message.markdown, toolName));
+		void MarkdownRenderer.render(app, markdown, body, sessionId, component)
 			.then(() => decorateDiffBlocks(body))
 			.catch((error: unknown) => setRenderError(toErrorMessage(error)));
 		return () => {

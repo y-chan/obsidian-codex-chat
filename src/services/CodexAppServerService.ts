@@ -1,9 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { parseCodexHistoryText } from '../parsers/CodexHistoryParser';
-import { codexHomeCandidates, normalizeFilesystemPath, pathsEqual } from '../utils/paths';
+import { codexHomeCandidates, normalizeFilesystemPath } from '../utils/paths';
+import { resolveCodexPath } from './CodexChatService';
 
 export type ApprovalDecision = 'accept' | 'acceptForSession' | 'decline' | 'cancel';
 export type ThinkingEffort = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
@@ -268,5 +268,3 @@ function toUsageWindow(value: unknown): UsageWindow | undefined { const item = a
 function isFiveHourWindow(value: unknown): boolean { const duration = numberValue(asRecord(value)?.windowDurationMins); return duration !== undefined && duration <= 24 * 60; }
 function displayValue(value: unknown): string | undefined { return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined; }
 function isThinkingEffort(value: string): value is Exclude<ThinkingEffort, ''> { return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh'; }
-function resolveCodexPath(): string { const explicit = process.env.CODEX_PATH; if (explicit && existsSync(explicit)) return explicit; const triple = process.arch === 'arm64' ? 'aarch64-pc-windows-msvc' : 'x86_64-pc-windows-msvc'; if (process.platform === 'win32') { const roots = [process.env.NVM_SYMLINK ? path.join(process.env.NVM_SYMLINK, 'node_modules', '@openai', 'codex') : undefined, process.env.NVM_HOME ? path.join(process.env.NVM_HOME, 'nodejs', 'node_modules', '@openai', 'codex') : undefined].filter((value): value is string => Boolean(value)); for (const root of roots) { const candidate = path.join(root, 'vendor', triple, 'bin', 'codex.exe'); if (existsSync(candidate)) return candidate; } const global = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'pnpm', 'global') : undefined; if (global) for (const version of directories(global)) for (const packageDirectory of directories(path.join(global, version, '.pnpm'))) if (packageDirectory.startsWith('@openai+codex@')) { const candidate = path.join(global, version, '.pnpm', packageDirectory, 'node_modules', '@openai', 'codex', 'vendor', triple, 'bin', 'codex.exe'); if (existsSync(candidate)) return candidate; } } for (const directory of (process.env.Path ?? process.env.PATH ?? '').split(path.delimiter).filter(Boolean)) { const candidate = path.join(directory, process.platform === 'win32' ? 'codex.exe' : 'codex'); if (existsSync(candidate)) return candidate; } return 'codex'; }
-function directories(root: string): string[] { try { return readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name); } catch { return []; } }

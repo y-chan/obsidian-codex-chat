@@ -1,6 +1,7 @@
 import { Codex, type Input, type ThreadEvent, type ThreadItem } from '@openai/codex-sdk';
 import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 
 export interface SendChatOptions {
@@ -123,7 +124,7 @@ function toStreamUpdate(item: ThreadItem, completed: boolean): ChatStreamUpdate 
 	}
 }
 
-function resolveCodexPath(): string {
+export function resolveCodexPath(): string {
 	const explicitPath = process.env.CODEX_PATH;
 	if (explicitPath && existsSync(explicitPath)) return explicitPath;
 	const packagedBinary = resolvePlatformBinary();
@@ -135,6 +136,12 @@ function resolveCodexPath(): string {
 	const directories = [
 		...pathEntries,
 		process.env.PNPM_HOME,
+		...(process.platform === 'darwin' ? [
+			'/opt/homebrew/bin',
+			'/usr/local/bin',
+			path.join(os.homedir(), '.local', 'bin'),
+			path.join(os.homedir(), '.npm-global', 'bin'),
+		] : []),
 		process.env.NVM_SYMLINK,
 		process.env.NVM_HOME ? path.join(process.env.NVM_HOME, 'nodejs') : undefined,
 		process.env.APPDATA ? path.join(process.env.APPDATA, 'npm') : undefined,

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { filterSessionSummaries, parseCodexHistoryText, sortSessionSummaries } from '../src/parsers/CodexHistoryParser.ts';
 import { normalizeFilesystemPath, validateWorkingDirectory } from '../src/utils/paths.ts';
+import { normalizeMathDelimiters } from '../src/ui/markdown.ts';
 
 void test('normalizes Windows and Git Bash paths', () => {
 	assert.equal(normalizeFilesystemPath('/c/Users/test/project', 'win32'), 'C:\\Users\\test\\project');
@@ -24,6 +25,11 @@ void test('parses JSON history with Markdown and formula text', () => {
 	const parsed = parseCodexHistoryText(JSON.stringify({ id: 'json-session', messages: [{ role: 'assistant', text: 'Long markdown $$a=b$$' }] }), 'history.json');
 	assert.equal(parsed.session.id, 'json-session');
 	assert.match(parsed.session.messages[0]?.markdown ?? '', /a=b/);
+});
+
+void test('normalizes bracket math without changing fenced code', () => {
+	const markdown = 'before \\[x^2 + y^2\\]\n\n```\n\\[keep this literal\\]\n```';
+	assert.equal(normalizeMathDelimiters(markdown), 'before $$x^2 + y^2$$\n\n```\n\\[keep this literal\\]\n```');
 });
 
 void test('parses JSONL with a broken line and unknown role', () => {
